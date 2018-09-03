@@ -25,4 +25,6 @@ public class Demand {
     Supplier agent;
     Store store;
     CustomerOrder customerOrder;
+    Employee owner;
+    Group group;
 }

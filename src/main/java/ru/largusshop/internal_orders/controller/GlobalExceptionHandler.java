@@ -10,6 +10,8 @@ import ru.largusshop.internal_orders.service.ExceptionMapper;
 import ru.largusshop.internal_orders.utils.exception.AppException;
 import ru.largusshop.internal_orders.utils.exception.ExceptionInfo;
 
+import java.util.Arrays;
+
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -19,7 +21,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<Object> handleCheckedException(AppException e) {
-        String message = "Message: " + e.getMessage() + "\nException: \n" + e + "\n";
+        String message = "Message: " + e.getMessage() + "\nException: \n" + e.toString() + "\n";
         System.err.println(message);
         return new ResponseEntity<>(message, e.getResponseErrorCode());
     }
@@ -32,7 +34,7 @@ public class GlobalExceptionHandler {
 //        }
 
         ExceptionInfo exceptionInfo = exceptionMapper.mapThrowableOnEntity(e);
-        System.err.println("Message: " + e.getMessage() + "\nException: \n" + e + "\n");
+        System.err.println("Message: " + e.getMessage() + "\nException: \n" + e.toString() + "\n" +"Stacktrace: "+ Arrays.toString(e.getStackTrace()));
         return new ResponseEntity<>(exceptionInfo, HttpStatus.valueOf(exceptionInfo.getResponseErrorCode().name()));
     }
 }

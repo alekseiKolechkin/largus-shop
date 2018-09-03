@@ -13,6 +13,8 @@ import ru.largusshop.internal_orders.model.Position;
 import java.util.Iterator;
 import java.util.List;
 
+import static java.util.Objects.isNull;
+
 @Service
 public class ExcelService {
     public HSSFWorkbook getExcelFromDemands(List<Demand> demands) {
@@ -52,9 +54,9 @@ public class ExcelService {
         row.createCell(0).setCellValue(position.getAssortment().getCode());
         row.createCell(1).setCellValue(position.getAssortment().getName());
         row.createCell(2).setCellValue(position.getCost());
-        row.createCell(3).setCellValue(position.getAssortment().getBuyPrice().getValue() * position.getQuantity());
+        row.createCell(3).setCellValue((isNull(position.getAssortment().getBuyPrice()) ? position.getAssortment().getProduct().getBuyPrice().getValue() : position.getAssortment().getBuyPrice().getValue()) * position.getQuantity());
         row.createCell(4).setCellValue(position.getQuantity());
-        row.createCell(5).setCellFormula("(D" + displayedRowNum + "-C" + displayedRowNum + ")/D" + displayedRowNum);
+        row.createCell(5).setCellFormula("(D" + displayedRowNum + "-C" + displayedRowNum + ")/E" + displayedRowNum);
     }
 
     private HSSFCellStyle getBoldStyle(HSSFWorkbook workbook) {

@@ -26,5 +26,6 @@ public class Counterparty {
     private Employee owner;
     List<String> tags;
     List<Attribute> attributes;
+    private Group group;
 
 }

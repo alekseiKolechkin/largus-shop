@@ -132,7 +132,7 @@ public class EntityClient {
     }
 
     public <T> T createEntity(String entityName, Class<T> entityType, T entity, Credentials credentials) throws Exception {
-        HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "?expand=positions.assortment", "POST", credentials.getAuthStr());
+        HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "?expand=positions.assortment.product", "POST", credentials.getAuthStr());
         try {
             OutputStreamWriter osw = new OutputStreamWriter(connection.getOutputStream(), StandardCharsets.UTF_8);
             String body = JSON.toJSONString(entity, SerializerFeature.DisableCircularReferenceDetect, SerializerFeature.PrettyFormat);
@@ -181,7 +181,7 @@ public class EntityClient {
 
     //TODO: correct messages
     public <T> T getTemplateBasedOnDocument(String entityName, Class<T> entityType, TemplateCustomerOrder customerOrder, Credentials credentials) throws Exception {
-        HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "/new?expand=positions.assortment", "PUT", credentials.getAuthStr());
+        HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "/new?expand=positions.assortment,positions.assortment.product", "PUT", credentials.getAuthStr());
         try {
             OutputStreamWriter osw = new OutputStreamWriter(connection.getOutputStream(), StandardCharsets.UTF_8);
             String body = JSON.toJSONString(customerOrder, SerializerFeature.DisableCircularReferenceDetect, SerializerFeature.PrettyFormat);

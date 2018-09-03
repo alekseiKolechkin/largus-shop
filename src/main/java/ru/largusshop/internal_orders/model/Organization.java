@@ -11,7 +11,8 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Organization extends MetaClass {
+public class Organization{
+    Meta meta;
     UUID id;
     String name;
     Employee owner;

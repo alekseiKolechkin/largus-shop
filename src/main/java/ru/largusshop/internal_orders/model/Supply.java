@@ -18,4 +18,7 @@ public class Supply extends MetaClass {
     Counterparty agent;
     Store store;
     Positions positions;
+    Employee owner;
+    Boolean applicable;
+    Group group;
 }

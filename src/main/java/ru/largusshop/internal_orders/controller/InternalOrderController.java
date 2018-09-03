@@ -17,4 +17,9 @@ public class InternalOrderController {
     String processOrderd() throws Exception {
         return internalOrderService.createInternalOrdersFormCustomerOrders();
     }
+
+    @GetMapping("/healthCheck")
+    String healthCheck(){
+        return "It's alive!";
+    }
 }

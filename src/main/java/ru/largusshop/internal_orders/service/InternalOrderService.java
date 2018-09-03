@@ -7,6 +7,7 @@ import ru.largusshop.internal_orders.model.Counterparty;
 import ru.largusshop.internal_orders.model.CustomerOrder;
 import ru.largusshop.internal_orders.model.Demand;
 import ru.largusshop.internal_orders.model.Employee;
+import ru.largusshop.internal_orders.model.Group;
 import ru.largusshop.internal_orders.model.Meta;
 import ru.largusshop.internal_orders.model.Organization;
 import ru.largusshop.internal_orders.model.Position;
@@ -15,12 +16,12 @@ import ru.largusshop.internal_orders.model.StockReport;
 import ru.largusshop.internal_orders.model.Store;
 import ru.largusshop.internal_orders.model.Supply;
 import ru.largusshop.internal_orders.utils.Mails;
+import ru.largusshop.internal_orders.utils.exception.AppException;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static java.util.Objects.isNull;
@@ -44,7 +45,39 @@ public class InternalOrderService {
                                                                        .mediaType("application/json")
                                                                        .build())
                                                              .build();
+    private final Organization OOO_MAVIKO = Organization.builder()
+                                                        .meta(Meta.builder()
+                                                                  .href("https://online.moysklad.ru/api/remap/1.1/entity/organization/4769a1bb-2861-11e8-9107-5048000aa8cd")
+                                                                  .metadataHref("https://online.moysklad.ru/api/remap/1.1/entity/organization/metadata")
+                                                                  .type("organization")
+                                                                  .mediaType("application/json")
+                                                                  .build())
+                                                        .build();
 
+    private final Employee NIKOLAY = Employee.builder()
+                                             .meta(Meta.builder()
+                                                       .href("https://online.moysklad.ru/api/remap/1.1/entity/employee/cbeab98a-f362-11e4-7a40-e8970010f02e")
+                                                       .metadataHref("https://online.moysklad.ru/api/remap/1.1/entity/employee/metadata")
+                                                       .type("employee")
+                                                       .mediaType("application/json")
+                                                       .build())
+                                             .build();
+    private final Organization SIG = Organization.builder()
+                                                 .meta(Meta.builder()
+                                                           .href("https://online.moysklad.ru/api/remap/1.1/entity/organization/cbf3e8d8-f362-11e4-7a40-e8970010f053")
+                                                           .metadataHref("https://online.moysklad.ru/api/remap/1.1/entity/organization/metadata")
+                                                           .type("organization")
+                                                           .mediaType("application/json")
+                                                           .build())
+                                                 .build();
+
+    private final Group MAIN = Group.builder().meta(Meta.builder()
+                                                        .href("https://online.moysklad.ru/api/remap/1.1/entity/group/cc193245-f362-11e4-90a2-8ecb0000a5a1")
+                                                        .metadataHref("https://online.moysklad.ru/api/remap/1.1/entity/group/metadata")
+                                                        .type("group")
+                                                        .mediaType("application/json")
+                                                        .build())
+                                    .build();
     @Autowired
     private CustomerOrderService customerOrderService;
     @Autowired
@@ -63,7 +96,7 @@ public class InternalOrderService {
     private EmailService emailService;
 
     public String createInternalOrdersFormCustomerOrders() throws Exception {
-        List<CustomerOrder> customerOrders = customerOrderService.filter("expand=positions.assortment,agent&state.id=" + INTERNAL_ORDER_STATE_ID);
+        List<CustomerOrder> customerOrders = customerOrderService.filter("expand=positions.assortment,agent.owner&state.id=" + INTERNAL_ORDER_STATE_ID);
         if (isNull(customerOrders) || customerOrders.isEmpty()) {
             return "Заказы со статусом \"Внутренний заказ\" не найдены.";
         }
@@ -73,32 +106,41 @@ public class InternalOrderService {
         for (CustomerOrder customerOrder : customerOrders) {
             StockReport stockReport = reportService.getStockReportByDocWithId(customerOrder.getId());
             Thread.sleep(100L);
-            Demand template = demandService.getTemplateBasedOnCustomerOrder(customerOrder);
+            Demand templateDemand = demandService.getTemplateBasedOnCustomerOrder(customerOrder);
+            templateDemand.setName(customerOrder.getName());
             Thread.sleep(100L);
             List<Store> stores = storeService.getAllStores();
             List<Organization> organizations = organizationService.getAllOrganizations();
-            Employee owner = customerOrder.getAgent().getOwner();
+            Employee orderOwner = customerOrder.getAgent().getOwner();
+            templateDemand.setOwner(NIKOLAY);
+            templateDemand.setOrganization(SIG);
+            templateDemand.setGroup(MAIN);
             Store destinationStore = stores.stream()
-                                           .filter(store -> store.getOwner().equals(owner))
+                                           .filter(store -> store.getOwner().getMeta().equals(orderOwner.getMeta()))
                                            .findFirst()
-                                           .get();
+                                           .orElseThrow(() -> new AppException("Destination store not found for owner:" + orderOwner.getMeta().getHref()));
             Organization destinationOrganization = organizations.stream()
-                                                                .filter(organization -> organization.getOwner().equals(owner))
+                                                                .filter(organization -> organization.getOwner().getMeta().equals(orderOwner.getMeta()))
                                                                 .findFirst()
-                                                                .get();
+                                                                .orElseThrow(() -> new AppException("Destination organization not found for owner: " + orderOwner.getMeta().getHref()));
             Thread.sleep(100L);
-            for (Position position : template.getPositions().getRows()) {
+            for (Position position : templateDemand.getPositions().getRows()) {
                 Position stockPosition = stockReport.getRows()
                                                     .get(0)
                                                     .getPositions()
                                                     .stream()
-                                                    .filter(p -> p.getMeta().getHref().equals(position.getAssortment().getMeta().getHref()))
+                                                    .filter(p -> {
+                                                        String href = position.getAssortment().getMeta().getHref();
+                                                        href = href.split("\\?")[0];
+                                                        return p.getMeta().getHref().equals(href);
+                                                    })
                                                     .findFirst()
-                                                    .get();
-                int overhead = position.getQuantity() - stockPosition.getStock();
+                                                    .orElseThrow(() -> new AppException("Position not found in stock report: " + position.getAssortment().getName()));
+                int overhead = position.getQuantity() - (stockPosition.getStock() < 0 ? 0 : stockPosition.getStock());
                 Integer cost = stockPosition.getCost();
                 if (overhead > 0) {
-                    Integer buyPrice = position.getAssortment().getBuyPrice().getValue();
+                    Integer buyPrice = isNull(position.getAssortment().getBuyPrice()) ? position.getAssortment().getProduct().getBuyPrice().getValue()
+                            : position.getAssortment().getBuyPrice().getValue();
                     if (buyPrice == 0) {
                         emailService.sendEmails("У товара с кодом: " + position.getAssortment().getCode() + " нет закупочной цены.", Mails.getList());
                     }
@@ -107,33 +149,40 @@ public class InternalOrderService {
                 position.setCost(cost);
                 position.setPrice(cost / position.getQuantity());
             }
-            Demand createdDemand = demandService.create(template);
+            Demand createdDemand = demandService.create(templateDemand);
             createdDemand.getPositions()
                          .getRows()
                          .stream()
-                         .forEach(position -> position.setCost(template.getPositions()
-                                                                       .getRows()
-                                                                       .stream()
-                                                                       .filter(pos -> pos.getAssortment()
-                                                                                         .getMeta()
-                                                                                         .getHref()
-                                                                                         .equals(position.getAssortment()
-                                                                                                         .getMeta()
-                                                                                                         .getHref()))
-                                                                       .findAny()
-                                                                       .get()
-                                                                       .getCost()));
+                         .forEach(position -> position.setCost(templateDemand.getPositions()
+                                                                             .getRows()
+                                                                             .stream()
+                                                                             .filter(pos -> pos.getAssortment()
+                                                                                               .getMeta()
+                                                                                               .getHref()
+                                                                                               .split("\\?")
+                                                                                     [0]
+                                                                                     .equals(position.getAssortment()
+                                                                                                     .getMeta()
+                                                                                                     .getHref()
+                                                                                                     .split("\\?")
+                                                                                                     [0]))
+                                                                             .findAny()
+                                                                             .orElseThrow(() -> new AppException("Couldn't create supply. Position cost undefined:" + position.getAssortment().getName()))
+                                                                             .getCost()));
             Supply supply = Supply.builder().agent(OOO_SUPPLIER)
                                   .organization(destinationOrganization)
                                   .store(destinationStore)
-                                  .positions(template.getPositions())
+                                  .positions(templateDemand.getPositions())
+                                  .applicable(false)
+                                  .owner(orderOwner)
+                                  .group(orderOwner.getGroup())
                                   .build();
             supplyService.create(supply);
             createdDemands.add(createdDemand);
             CustomerOrder orderWithNewStatus = CustomerOrder.builder()
-                    .state(INTERNAL_ORDER_DEMANDED_STATE)
-                    .applicable(false)
-                    .build();
+                                                            .state(INTERNAL_ORDER_DEMANDED_STATE)
+                                                            .applicable(false)
+                                                            .build();
             customerOrderService.update(customerOrder.getId(), orderWithNewStatus);
             Thread.sleep(100L);
         }
