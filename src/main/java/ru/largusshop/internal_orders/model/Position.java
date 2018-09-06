@@ -12,13 +12,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Position {
-    Integer stock;
+    Float stock;
     Integer cost;
-    Integer inTransit;
-    Integer reserve;
+    Float inTransit;
+    Float reserve;
     private UUID id;
     private Meta meta;
-    private Integer quantity;
+    private Float quantity;
     private Integer price;
     private Assortment assortment;
     private String group;

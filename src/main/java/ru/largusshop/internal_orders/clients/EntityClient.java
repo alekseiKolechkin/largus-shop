@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import ru.largusshop.internal_orders.model.Audit;
 import ru.largusshop.internal_orders.model.TemplateCustomerOrder;
 import ru.largusshop.internal_orders.service.EmailService;
 import ru.largusshop.internal_orders.utils.Connector;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.isNull;
@@ -69,7 +71,7 @@ public class EntityClient {
         return entity;
     }
 
-    public <T> T downloadEntityById(String entityName, Class<T> entityType, String id, Credentials credentials, String parameters) throws IOException, InterruptedException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
+    public <T> T getEntityById(String entityName, Class<T> entityType, String id, Credentials credentials, String parameters) throws IOException {
         HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "/" + id + "?" + parameters, "GET", credentials.getAuthStr());
         try (InputStream in = connection.getInputStream(); JsonReader rdr = Json.createReader(in)) {
             JsonObject jsonObject = rdr.readObject();
@@ -131,7 +133,7 @@ public class EntityClient {
         }
     }
 
-    public <T> T createEntity(String entityName, Class<T> entityType, T entity, Credentials credentials) throws Exception {
+    public <T> T createEntity(String entityName, Class<T> entityType, T entity, Credentials credentials) throws IOException {
         HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "?expand=positions.assortment.product", "POST", credentials.getAuthStr());
         try {
             OutputStreamWriter osw = new OutputStreamWriter(connection.getOutputStream(), StandardCharsets.UTF_8);
@@ -226,6 +228,34 @@ public class EntityClient {
             emailService.sendEmail(details, "clearbox204@gmail.com");
             throw e;
         }
+    }
+
+    public List<Audit> audit(String entityName, UUID entityId, Credentials credentials, String parameters) throws IOException, InterruptedException {
+        int offset = 0;
+        int counter = 0;
+        List<Audit> entity = new ArrayList<>();
+        while (true) {
+            HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "/"+entityId+"/audit?" + parameters + "limit=100&offset=" + offset, "GET", credentials.getAuthStr());
+            try (InputStream in = connection.getInputStream(); JsonReader rdr = Json.createReader(in)) {
+                JsonArray rows = rdr.readObject().getJsonArray("rows");
+                if (isNull(rows)) {
+                    return new ArrayList<>();
+                }
+                if (rows.size() == 0) {
+                    break;
+                }
+                List<Audit> parsed = JSON.parseArray(rows.toString(), Audit.class);
+                entity.addAll(parsed);
+            } catch (Exception e) {
+                exceptionHandler.handleException(connection, e, entityName, entityId.toString(), "audit");
+                return null;
+            }
+            Thread.sleep(500L);
+            offset += 100;
+            counter++;
+            System.out.println(counter);
+        }
+        return entity;
     }
 
 }

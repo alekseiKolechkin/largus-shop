@@ -24,4 +24,6 @@ public class CustomerOrder extends MetaClass {
     Organization organization;
     Counterparty agent;
     State state;
+    Employee owner;
+    Group group;
 }

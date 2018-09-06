@@ -6,12 +6,20 @@ import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.stereotype.Service;
 import ru.largusshop.internal_orders.model.Demand;
 import ru.largusshop.internal_orders.model.Position;
+import org.apache.poi.ss.usermodel.*;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import static java.util.Objects.isNull;
 
@@ -66,4 +74,15 @@ public class ExcelService {
         style.setFont(font);
         return style;
     }
+//
+//    public void processExcel() throws IOException {
+//        Workbook workbook = new HSSFWorkbook(new FileInputStream("C:\\Users\\Aleksei_Kolechkin\\Downloads\\company-admin_sig-2018-09-06-12-14-24.xls"));
+//        Sheet sheet = workbook.getSheetAt(0);
+//        Map<String, String> map = new HashMap<>();
+//        for (Row row : sheet) {
+//            map.put(row.getCell(0).getStringCellValue(), row.getCell(1).getStringCellValue());
+//        }
+//        System.out.println("S");
+//
+//    }
 }

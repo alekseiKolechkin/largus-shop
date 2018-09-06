@@ -1,31 +1,55 @@
 package ru.largusshop.internal_orders.service;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import ru.largusshop.internal_orders.clients.EntityClient;
+import ru.largusshop.internal_orders.model.Audit;
 import ru.largusshop.internal_orders.model.CustomerOrder;
-import ru.largusshop.internal_orders.model.Demand;
+import ru.largusshop.internal_orders.model.Position;
+import ru.largusshop.internal_orders.model.PositionDiff;
+import ru.largusshop.internal_orders.model.Positions;
 import ru.largusshop.internal_orders.utils.Credentials;
+import ru.largusshop.internal_orders.utils.exception.AppError;
+import ru.largusshop.internal_orders.utils.exception.AppException;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
 @Service
 public class CustomerOrderService {
     @Autowired
     private EntityClient entityClient;
+    @Autowired
+    private CustomerOrderService customerOrderService;
+    @Autowired
+    private AuditService auditService;
 
-    public CustomerOrder create(CustomerOrder customerOrder) throws Exception {
-        return entityClient.createEntity("customerOrder", CustomerOrder.class, customerOrder, Credentials.KRUTILIN);
+    public CustomerOrder create(CustomerOrder customerOrder) {
+        try {
+            return entityClient.createEntity("customerOrder", CustomerOrder.class, customerOrder, Credentials.KRUTILIN);
+        } catch (IOException e) {
+            throw new AppException("Error while creating customer order, maybe connection error: " + e.toString(), AppError.APPLICATION_ERROR, e);
+        }
     }
 
     public CustomerOrder getById(UUID id) {
-        return null;
+        return getById(id, "");
+    }
+
+    public CustomerOrder getById(UUID id, String parameters) {
+        try {
+            return entityClient.getEntityById("customerOrder", CustomerOrder.class, id.toString(), Credentials.KRUTILIN, parameters);
+        } catch (IOException e) {
+            throw new AppException("Error while getting customer order with id: " + id + ", maybe connection error: " + e.toString(), AppError.APPLICATION_ERROR, e);
+        }
     }
 
     public List<CustomerOrder> search(String searchString) throws IOException {
@@ -48,5 +72,93 @@ public class CustomerOrderService {
 
     public void update(UUID id, CustomerOrder customerOrder) throws IOException {
         entityClient.updateEntity("customerOrder", id.toString(), customerOrder, Credentials.KRUTILIN);
+    }
+
+    public boolean createCustomerOrderFromAudit(UUID customerOrderId) {
+        CustomerOrder customerOrder = customerOrderService.getById(customerOrderId, "expand=owner.group");
+        return createCustomerOrderFromAudit(customerOrder);
+    }
+
+    public boolean createCustomerOrderFromAudit(CustomerOrder customerOrder) {
+        List<Audit> audit = auditService.auditCustomerOrder(customerOrder.getId());
+        audit = audit.stream().sorted(Comparator.comparing(Audit::getMoment).reversed()).collect(Collectors.toList());
+        Audit lastChangeMadeByCustomer = audit.stream().filter(a -> a.getUid().equals(customerOrder.getOwner().getUid())).findFirst().orElseGet(null);
+        List<Audit> changesToCreateOrderFrom = audit.subList(0, audit.indexOf(lastChangeMadeByCustomer));
+        customerOrder.setPositions(new Positions());
+        setNewName(customerOrder);
+        List<Position> positionsToAdd = new ArrayList<>();
+        for (Audit changes : changesToCreateOrderFrom) {
+            if (isNull(changes.getDiff()) || isNull(changes.getDiff().getPositions())) {
+                continue;
+            }
+            List<PositionDiff> positions = changes.getDiff().getPositions();
+            for (PositionDiff positionDiff : positions) {
+                Position newValue = positionDiff.getNewValue();
+                Position oldValue = positionDiff.getOldValue();
+                if (isNull(oldValue) && isNull(newValue)) {
+                    continue;
+                }
+                if (nonNull(newValue) && nonNull(oldValue)) {
+                    float quantityDiff = oldValue.getQuantity() - newValue.getQuantity();
+                    Position existingPosition = positionsToAdd.stream()
+                                                              .filter(position -> position.getAssortment().getMeta().equals(newValue.getMeta()))
+                                                              .findFirst().orElse(null);
+                    if (nonNull(existingPosition)) {
+                        existingPosition.setQuantity(existingPosition.getQuantity() + quantityDiff);
+                    } else {
+                        newValue.setQuantity(quantityDiff);
+                        positionsToAdd.add(newValue);
+                    }
+                    continue;
+                }
+                if (nonNull(newValue)) {
+                    Position existingPosition = positionsToAdd.stream()
+                                                              .filter(position -> position.getAssortment().getMeta().equals(newValue.getMeta()))
+                                                              .findFirst().orElse(null);
+                    if (nonNull(existingPosition)) {
+                        existingPosition.setQuantity(existingPosition.getQuantity() - newValue.getQuantity());
+                    } else {
+                        newValue.setQuantity(-newValue.getQuantity());
+                        positionsToAdd.add(newValue);
+                    }
+                    continue;
+                }
+                Position existingPosition = positionsToAdd.stream()
+                                                          .filter(position -> position.getAssortment().getMeta().equals(oldValue.getMeta()))
+                                                          .findFirst().orElse(null);
+                if (nonNull(existingPosition)) {
+                    existingPosition.setQuantity(existingPosition.getQuantity() + oldValue.getQuantity());
+                } else {
+                    oldValue.setQuantity(oldValue.getQuantity());
+                    positionsToAdd.add(oldValue);
+                }
+            }
+        }
+        positionsToAdd = positionsToAdd.stream().filter(position -> position.getQuantity() > 0).collect(Collectors.toList());
+        positionsToAdd.forEach(position -> {
+            position.setReserve(null);
+            position.setPrice(position.getPrice()*100);
+        });
+        if (positionsToAdd.isEmpty()) {
+            return false;
+        }
+        customerOrder.getPositions().setRows(positionsToAdd);
+        customerOrderService.create(customerOrder);
+        return true;
+    }
+
+    private void setNewName(CustomerOrder customerOrder) {
+        String name = customerOrder.getName();
+        String[] split = name.split("-");
+        if (split.length >= 2) {
+            String lastCharacter = split[split.length - 1];
+            if (StringUtils.isNumeric(lastCharacter)) {
+                customerOrder.setName(name.substring(0, name.lastIndexOf("-")) + "-" + (Integer.parseInt(lastCharacter) + 1));
+            } else {
+                customerOrder.setName(name + "-1");
+            }
+        } else {
+            customerOrder.setName(name + "-1");
+        }
     }
 }

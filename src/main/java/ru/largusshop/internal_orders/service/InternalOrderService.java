@@ -96,7 +96,7 @@ public class InternalOrderService {
     private EmailService emailService;
 
     public String createInternalOrdersFormCustomerOrders() throws Exception {
-        List<CustomerOrder> customerOrders = customerOrderService.filter("expand=positions.assortment,agent.owner&state.id=" + INTERNAL_ORDER_STATE_ID);
+        List<CustomerOrder> customerOrders = customerOrderService.filter("expand=owner,positions.assortment,agent.owner&state.id=" + INTERNAL_ORDER_STATE_ID);
         if (isNull(customerOrders) || customerOrders.isEmpty()) {
             return "Заказы со статусом \"Внутренний заказ\" не найдены.";
         }
@@ -104,71 +104,34 @@ public class InternalOrderService {
         Thread.sleep(100L);
         List<Demand> createdDemands = new ArrayList<>();
         for (CustomerOrder customerOrder : customerOrders) {
+            //Получить остатки
             StockReport stockReport = reportService.getStockReportByDocWithId(customerOrder.getId());
             Thread.sleep(100L);
+            //Создать шаблон отгрузки
             Demand templateDemand = demandService.getTemplateBasedOnCustomerOrder(customerOrder);
             templateDemand.setName(customerOrder.getName());
             Thread.sleep(100L);
+            //Отредактировать шаблон
             List<Store> stores = storeService.getAllStores();
             List<Organization> organizations = organizationService.getAllOrganizations();
             Employee orderOwner = customerOrder.getAgent().getOwner();
             templateDemand.setOwner(NIKOLAY);
             templateDemand.setOrganization(SIG);
             templateDemand.setGroup(MAIN);
-            Store destinationStore = stores.stream()
-                                           .filter(store -> store.getOwner().getMeta().equals(orderOwner.getMeta()))
-                                           .findFirst()
-                                           .orElseThrow(() -> new AppException("Destination store not found for owner:" + orderOwner.getMeta().getHref()));
-            Organization destinationOrganization = organizations.stream()
-                                                                .filter(organization -> organization.getOwner().getMeta().equals(orderOwner.getMeta()))
-                                                                .findFirst()
-                                                                .orElseThrow(() -> new AppException("Destination organization not found for owner: " + orderOwner.getMeta().getHref()));
+            Store destinationStore = getDestinationStore(stores, orderOwner);
+            Organization destinationOrganization = getDestinationOrganization(organizations, orderOwner);
             Thread.sleep(100L);
+            //Задать стоимость позиций
             for (Position position : templateDemand.getPositions().getRows()) {
-                Position stockPosition = stockReport.getRows()
-                                                    .get(0)
-                                                    .getPositions()
-                                                    .stream()
-                                                    .filter(p -> {
-                                                        String href = position.getAssortment().getMeta().getHref();
-                                                        href = href.split("\\?")[0];
-                                                        return p.getMeta().getHref().equals(href);
-                                                    })
-                                                    .findFirst()
-                                                    .orElseThrow(() -> new AppException("Position not found in stock report: " + position.getAssortment().getName()));
-                int overhead = position.getQuantity() - (stockPosition.getStock() < 0 ? 0 : stockPosition.getStock());
-                Integer cost = stockPosition.getCost();
-                if (overhead > 0) {
-                    Integer buyPrice = isNull(position.getAssortment().getBuyPrice()) ? position.getAssortment().getProduct().getBuyPrice().getValue()
-                            : position.getAssortment().getBuyPrice().getValue();
-                    if (buyPrice == 0) {
-                        emailService.sendEmails("У товара с кодом: " + position.getAssortment().getCode() + " нет закупочной цены.", Mails.getList());
-                    }
-                    cost = cost + overhead * buyPrice;
-                }
-                position.setCost(cost);
-                position.setPrice(cost / position.getQuantity());
+                Position stockPosition = getStockPosition(stockReport, position);
+                Float overhead = position.getQuantity() - (stockPosition.getStock() < 0 ? 0 : stockPosition.getStock());
+                setPositionPriceAndCost(position, stockPosition, overhead);
             }
+            //Создать отгрузку
             Demand createdDemand = demandService.create(templateDemand);
-            createdDemand.getPositions()
-                         .getRows()
-                         .stream()
-                         .forEach(position -> position.setCost(templateDemand.getPositions()
-                                                                             .getRows()
-                                                                             .stream()
-                                                                             .filter(pos -> pos.getAssortment()
-                                                                                               .getMeta()
-                                                                                               .getHref()
-                                                                                               .split("\\?")
-                                                                                     [0]
-                                                                                     .equals(position.getAssortment()
-                                                                                                     .getMeta()
-                                                                                                     .getHref()
-                                                                                                     .split("\\?")
-                                                                                                     [0]))
-                                                                             .findAny()
-                                                                             .orElseThrow(() -> new AppException("Couldn't create supply. Position cost undefined:" + position.getAssortment().getName()))
-                                                                             .getCost()));
+            setCostForCreatedDemandPositions(templateDemand, createdDemand);
+            createdDemands.add(createdDemand);
+            //Создать приемку
             Supply supply = Supply.builder().agent(OOO_SUPPLIER)
                                   .organization(destinationOrganization)
                                   .store(destinationStore)
@@ -178,24 +141,88 @@ public class InternalOrderService {
                                   .group(orderOwner.getGroup())
                                   .build();
             supplyService.create(supply);
-            createdDemands.add(createdDemand);
+            //создать новый заказ с удаленными позицями
+            customerOrderService.createCustomerOrderFromAudit(customerOrder);
+            Thread.sleep(100L);
+            //Обновить статус заказа и снять проведение
             CustomerOrder orderWithNewStatus = CustomerOrder.builder()
                                                             .state(INTERNAL_ORDER_DEMANDED_STATE)
                                                             .applicable(false)
                                                             .build();
             customerOrderService.update(customerOrder.getId(), orderWithNewStatus);
             Thread.sleep(100L);
+
         }
+        //Создать ексель и отправить письма
         HSSFWorkbook workbook = excelService.getExcelFromDemands(createdDemands);
         String fileName = "demands-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")) + ".xls";
-//        try (FileOutputStream out = new FileOutputStream(new File(fileName))) {
-//            workbook.write(out);
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         workbook.write(baos);
         emailService.sendEmailsWithAttachment("Внутренние заказы обработаны.", Mails.getList(), baos, fileName);
         return "Внутренние заказы обработаны.";
+    }
+
+    private void setCostForCreatedDemandPositions(Demand templateDemand, Demand createdDemand) {
+        createdDemand.getPositions()
+                     .getRows()
+                     .stream()
+                     .forEach(position -> position.setCost(templateDemand.getPositions()
+                                                                         .getRows()
+                                                                         .stream()
+                                                                         .filter(pos -> pos.getAssortment()
+                                                                                           .getMeta()
+                                                                                           .getHref()
+                                                                                           .split("\\?")
+                                                                                 [0]
+                                                                                 .equals(position.getAssortment()
+                                                                                                 .getMeta()
+                                                                                                 .getHref()
+                                                                                                 .split("\\?")
+                                                                                                 [0]))
+                                                                         .findAny()
+                                                                         .orElseThrow(() -> new AppException("Couldn't create supply. Position cost undefined:" + position.getAssortment().getName()))
+                                                                         .getCost()));
+    }
+
+    private void setPositionPriceAndCost(Position position, Position stockPosition, Float overhead) {
+        Integer cost = stockPosition.getCost();
+        if (overhead > 0) {
+            Integer buyPrice = isNull(position.getAssortment().getBuyPrice()) ? position.getAssortment().getProduct().getBuyPrice().getValue()
+                    : position.getAssortment().getBuyPrice().getValue();
+            if (buyPrice == 0) {
+                emailService.sendEmails("У товара с кодом: " + position.getAssortment().getCode() + " нет закупочной цены.", Mails.getList());
+            }
+            cost = cost + Math.round(overhead * buyPrice);
+        }
+        position.setCost(cost);
+        position.setPrice(Math.round(cost / position.getQuantity()));
+    }
+
+    private Position getStockPosition(StockReport stockReport, Position position) {
+        return stockReport.getRows()
+                          .get(0)
+                          .getPositions()
+                          .stream()
+                          .filter(p -> {
+                              String href = position.getAssortment().getMeta().getHref();
+                              href = href.split("\\?")[0];
+                              return p.getMeta().getHref().equals(href);
+                          })
+                          .findFirst()
+                          .orElseThrow(() -> new AppException("Position not found in stock report: " + position.getAssortment().getName()));
+    }
+
+    private Organization getDestinationOrganization(List<Organization> organizations, Employee orderOwner) {
+        return organizations.stream()
+                            .filter(organization -> organization.getOwner().getMeta().equals(orderOwner.getMeta()))
+                            .findFirst()
+                            .orElseThrow(() -> new AppException("Destination organization not found for owner: " + orderOwner.getMeta().getHref()));
+    }
+
+    private Store getDestinationStore(List<Store> stores, Employee orderOwner) {
+        return stores.stream()
+                     .filter(store -> store.getOwner().getMeta().equals(orderOwner.getMeta()))
+                     .findFirst()
+                     .orElseThrow(() -> new AppException("Destination store not found for owner:" + orderOwner.getMeta().getHref()));
     }
 }
