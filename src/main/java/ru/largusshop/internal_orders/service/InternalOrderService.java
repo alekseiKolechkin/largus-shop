@@ -37,6 +37,14 @@ public class InternalOrderService {
                                                                     .mediaType("application/json")
                                                                     .build())
                                                           .build();
+    private final Counterparty OSNOVNOY_SKLAD = Counterparty.builder()
+                                                          .meta(Meta.builder()
+                                                                    .href("https://online.moysklad.ru/api/remap/1.1/entity/counterparty/6575d6cb-ad49-11e8-9ff4-3150000d1268")
+                                                                    .metadataHref("https://online.moysklad.ru/api/remap/1.1/entity/counterparty/metadata")
+                                                                    .type("counterparty")
+                                                                    .mediaType("application/json")
+                                                                    .build())
+                                                          .build();
     private final State INTERNAL_ORDER_DEMANDED_STATE = State.builder()
                                                              .meta(Meta.builder()
                                                                        .href("https://online.moysklad.ru/api/remap/1.1/entity/customerorder/metadata/states/8891f30c-a558-11e8-9ff4-315000279879")
@@ -132,7 +140,7 @@ public class InternalOrderService {
             setCostForCreatedDemandPositions(templateDemand, createdDemand);
             createdDemands.add(createdDemand);
             //Создать приемку
-            Supply supply = Supply.builder().agent(OOO_SUPPLIER)
+            Supply supply = Supply.builder().agent(OSNOVNOY_SKLAD)
                                   .organization(destinationOrganization)
                                   .store(destinationStore)
                                   .positions(templateDemand.getPositions())

@@ -26,4 +26,5 @@ public class CustomerOrder extends MetaClass {
     State state;
     Employee owner;
     Group group;
+    Store store;
 }

@@ -6,9 +6,11 @@ import org.springframework.stereotype.Service;
 import ru.largusshop.internal_orders.clients.EntityClient;
 import ru.largusshop.internal_orders.model.Audit;
 import ru.largusshop.internal_orders.model.CustomerOrder;
+import ru.largusshop.internal_orders.model.Meta;
 import ru.largusshop.internal_orders.model.Position;
 import ru.largusshop.internal_orders.model.PositionDiff;
 import ru.largusshop.internal_orders.model.Positions;
+import ru.largusshop.internal_orders.model.State;
 import ru.largusshop.internal_orders.utils.Credentials;
 import ru.largusshop.internal_orders.utils.exception.AppError;
 import ru.largusshop.internal_orders.utils.exception.AppException;
@@ -25,6 +27,15 @@ import static java.util.Objects.nonNull;
 
 @Service
 public class CustomerOrderService {
+    private final State PREDVARITELNYI_VNUTRENNIY = State.builder()
+                                                         .meta(Meta.builder()
+                                                                   .href("https://online.moysklad.ru/api/remap/1.1/entity/customerorder/metadata/states/f79b9eac-b295-11e8-9109-f8fc00115cd9")
+                                                                   .metadataHref("https://online.moysklad.ru/api/remap/1.1/entity/customerorder/metadata")
+                                                                   .type("state")
+                                                                   .mediaType("application/json")
+                                                                   .build())
+                                                         .build();
+
     @Autowired
     private EntityClient entityClient;
     @Autowired
@@ -143,6 +154,7 @@ public class CustomerOrderService {
             return false;
         }
         customerOrder.getPositions().setRows(positionsToAdd);
+        customerOrder.setState(PREDVARITELNYI_VNUTRENNIY);
         customerOrderService.create(customerOrder);
         return true;
     }
