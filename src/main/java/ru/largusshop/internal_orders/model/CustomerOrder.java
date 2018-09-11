@@ -27,4 +27,5 @@ public class CustomerOrder extends MetaClass {
     Employee owner;
     Group group;
     Store store;
+    Integer sum;
 }

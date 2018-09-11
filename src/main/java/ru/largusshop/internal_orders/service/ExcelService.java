@@ -2,24 +2,18 @@ package ru.largusshop.internal_orders.service;
 
 import org.apache.poi.hssf.usermodel.HSSFCellStyle;
 import org.apache.poi.hssf.usermodel.HSSFFont;
+import org.apache.poi.hssf.usermodel.HSSFRow;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.stereotype.Service;
+import ru.largusshop.internal_orders.model.CustomerOrder;
 import ru.largusshop.internal_orders.model.Demand;
 import ru.largusshop.internal_orders.model.Position;
-import org.apache.poi.ss.usermodel.*;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import static java.util.Objects.isNull;
 
@@ -30,9 +24,9 @@ public class ExcelService {
         for (Demand demand : demands) {
             HSSFSheet sheet = workbook.createSheet(demand.getName());
             int rowNum = 0;
-            fillHeader(workbook, sheet, rowNum);
+            fillHeaderDemand(workbook, sheet, rowNum);
             for (Position position : demand.getPositions().getRows()) {
-                createRow(sheet, ++rowNum, position);
+                createRowDemand(sheet, ++rowNum, position);
             }
             Row row = sheet.getRow(0);
             Iterator<Cell> cellIterator = row.cellIterator();
@@ -45,7 +39,7 @@ public class ExcelService {
         return workbook;
     }
 
-    private void fillHeader(HSSFWorkbook workbook, HSSFSheet sheet, int rowNum) {
+    private void fillHeaderDemand(HSSFWorkbook workbook, HSSFSheet sheet, int rowNum) {
         Row row = sheet.createRow(rowNum);
         row.createCell(0).setCellValue("Код");
         row.createCell(1).setCellValue("Наименование");
@@ -56,7 +50,14 @@ public class ExcelService {
         row.setRowStyle(getBoldStyle(workbook));
     }
 
-    private void createRow(HSSFSheet sheet, int rowNum, Position position) {
+    private void fillHeaderCustomerOrder(HSSFWorkbook workbook, HSSFSheet sheet, int rowNum) {
+        Row row = sheet.createRow(rowNum);
+        row.createCell(0).setCellValue("Наименование");
+        row.createCell(1).setCellValue("Количество");
+        row.setRowStyle(getBoldStyle(workbook));
+    }
+
+    private void createRowDemand(HSSFSheet sheet, int rowNum, Position position) {
         Row row = sheet.createRow(rowNum);
         int displayedRowNum = rowNum + 1;
         row.createCell(0).setCellValue(position.getAssortment().getCode());
@@ -67,12 +68,39 @@ public class ExcelService {
         row.createCell(5).setCellFormula("(D" + displayedRowNum + "-C" + displayedRowNum + ")/E" + displayedRowNum);
     }
 
+    private void createRowCustomerOrder(HSSFSheet sheet, int rowNum, Position position) {
+        Row row = sheet.createRow(rowNum);
+        row.createCell(0).setCellValue(position.getAssortment().getName());
+        row.createCell(1).setCellValue(position.getQuantity());
+    }
+
     private HSSFCellStyle getBoldStyle(HSSFWorkbook workbook) {
         HSSFFont font = workbook.createFont();
         font.setBold(true);
         HSSFCellStyle style = workbook.createCellStyle();
         style.setFont(font);
         return style;
+    }
+
+    public HSSFWorkbook getExcelFromCustomerOrder(CustomerOrder customerOrder, Integer percent){
+        HSSFWorkbook workbook = new HSSFWorkbook();
+        HSSFSheet sheet = workbook.createSheet(customerOrder.getName());
+        int rowNum = 0;
+        fillHeaderCustomerOrder(workbook, sheet, rowNum);
+        for (Position position : customerOrder.getPositions().getRows()) {
+            createRowCustomerOrder(sheet, ++rowNum, position);
+        }
+        Row lastRow = sheet.createRow(++rowNum);
+        lastRow.createCell(0).setCellValue("Процент суммы успешной отгрузки:");
+        lastRow.createCell(1).setCellValue(percent);
+        Row row = sheet.getRow(0);
+        Iterator<Cell> cellIterator = row.cellIterator();
+        while (cellIterator.hasNext()) {
+            Cell cell = cellIterator.next();
+            int columnIndex = cell.getColumnIndex();
+            sheet.autoSizeColumn(columnIndex);
+        }
+        return workbook;
     }
 //
 //    public void processExcel() throws IOException {

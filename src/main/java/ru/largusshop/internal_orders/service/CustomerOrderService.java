@@ -1,6 +1,7 @@
 package ru.largusshop.internal_orders.service;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import ru.largusshop.internal_orders.clients.EntityClient;
@@ -12,10 +13,16 @@ import ru.largusshop.internal_orders.model.PositionDiff;
 import ru.largusshop.internal_orders.model.Positions;
 import ru.largusshop.internal_orders.model.State;
 import ru.largusshop.internal_orders.utils.Credentials;
+import ru.largusshop.internal_orders.utils.Mails;
 import ru.largusshop.internal_orders.utils.exception.AppError;
 import ru.largusshop.internal_orders.utils.exception.AppException;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -42,6 +49,10 @@ public class CustomerOrderService {
     private CustomerOrderService customerOrderService;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private ExcelService excelService;
+    @Autowired
+    private EmailService emailService;
 
     public CustomerOrder create(CustomerOrder customerOrder) {
         try {
@@ -91,6 +102,7 @@ public class CustomerOrderService {
     }
 
     public boolean createCustomerOrderFromAudit(CustomerOrder customerOrder) {
+        Integer sumOfOrder = customerOrder.getSum();
         List<Audit> audit = auditService.auditCustomerOrder(customerOrder.getId());
         audit = audit.stream().sorted(Comparator.comparing(Audit::getMoment).reversed()).collect(Collectors.toList());
         Audit lastChangeMadeByCustomer = audit.stream().filter(a -> a.getUid().equals(customerOrder.getOwner().getUid())).findFirst().orElseGet(null);
@@ -155,7 +167,18 @@ public class CustomerOrderService {
         }
         customerOrder.getPositions().setRows(positionsToAdd);
         customerOrder.setState(PREDVARITELNYI_VNUTRENNIY);
-        customerOrderService.create(customerOrder);
+        CustomerOrder newOrder = customerOrderService.create(customerOrder);
+        int wholeSum = sumOfOrder + newOrder.getSum();
+        int percent = sumOfOrder / (wholeSum / 100);
+        HSSFWorkbook excelFromCustomerOrder = excelService.getExcelFromCustomerOrder(customerOrder, percent);
+        String fileName = "customerOrder-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")) + ".xls";
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
+            excelFromCustomerOrder.write(baos);
+        } catch (IOException e) {
+            throw new AppException("Excel write failed.");
+        }
+        emailService.sendEmailsWithAttachment("Неотгруженные товары", Mails.getList(), baos, fileName);
         return true;
     }
 
