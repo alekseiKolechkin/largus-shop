@@ -105,8 +105,8 @@ public class CustomerOrderService {
         Integer sumOfOrder = customerOrder.getSum();
         List<Audit> audit = auditService.auditCustomerOrder(customerOrder.getId());
         audit = audit.stream().sorted(Comparator.comparing(Audit::getMoment).reversed()).collect(Collectors.toList());
-        Audit lastChangeMadeByCustomer = audit.stream().filter(a -> a.getUid().equals(customerOrder.getOwner().getUid())).findFirst().orElseGet(null);
-        List<Audit> changesToCreateOrderFrom = audit.subList(0, audit.indexOf(lastChangeMadeByCustomer));
+        Audit lastChangeMadeByCustomer = audit.stream().filter(a -> a.getUid().equals(customerOrder.getOwner().getUid())).findFirst().orElse(null);
+        List<Audit> changesToCreateOrderFrom = audit.subList(0, nonNull(lastChangeMadeByCustomer) ? audit.indexOf(lastChangeMadeByCustomer) : audit.size());
         customerOrder.setPositions(new Positions());
         setNewName(customerOrder);
         List<Position> positionsToAdd = new ArrayList<>();
