@@ -21,9 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.lang.reflect.InvocationTargetException;
 import java.net.HttpURLConnection;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -112,14 +110,14 @@ public class EntityClient {
                 InputStream errorStream = connection.getErrorStream();
                 if (nonNull(errorStream)) {
                     BufferedReader rdr = new BufferedReader(new InputStreamReader(errorStream));
-                    String error = rdr.lines().collect(Collectors.joining("\n"));
+                    String error = rdr.lines().collect(Collectors.joining("<br>"));
                     String message = "Error while updating " + entityName + " with id: " + id;
-                    emailService.sendEmail(errorTime + "\n" + message + "\n" + error, "clearbox204@gmail.com");
+                    emailService.sendEmail(errorTime + "<br>" + message + "<br>" + error, "clearbox204@gmail.com");
                     return;
 
                 } else {
                     String error = "Unknown error while updating " + entityName + " with id: " + id;
-                    String message = errorTime + "\n" + error + "\n" + connection.getResponseMessage() + "\n" + connection.getResponseCode();
+                    String message = errorTime + "<br>" + error + "<br>" + connection.getResponseMessage() + "<br>" + connection.getResponseCode();
                     System.err.println(message);
                     emailService.sendEmail(message, "clearbox204@gmail.com");
                     return;
@@ -146,14 +144,14 @@ public class EntityClient {
                 InputStream errorStream = connection.getErrorStream();
                 if (nonNull(errorStream)) {
                     BufferedReader rdr = new BufferedReader(new InputStreamReader(errorStream));
-                    String error = rdr.lines().collect(Collectors.joining("\n"));
-                    String message = "Error while creating " + entityName + " body: " + body + "\n\n";
-                    emailService.sendEmail(errorTime + "\n" + message + "\n" + error, "clearbox204@gmail.com");
-                    throw new AppException(errorTime + "\n" + message + "\n" + error);
+                    String error = rdr.lines().collect(Collectors.joining("<br>"));
+                    String message = "Error while creating " + entityName + "<br>";
+                    emailService.sendEmail(errorTime + "<br>" + message + "<br>" + error + "<br>Body: " + body, "clearbox204@gmail.com");
+                    throw new AppException(errorTime + "<br>" + message + "<br>" + error + "<br>Body: " + body);
 
                 } else {
                     String error = "Unknown error while creating " + entityName + " body: " + body;
-                    String message = errorTime + "\n" + error + "\n" + connection.getResponseMessage() + "\n" + connection.getResponseCode();
+                    String message = errorTime + "<br>" + error + "<br>" + connection.getResponseMessage() + "<br>" + connection.getResponseCode();
                     System.err.println(message);
                     emailService.sendEmail(message, "clearbox204@gmail.com");
                     throw new AppException(message);
@@ -195,15 +193,15 @@ public class EntityClient {
                 InputStream errorStream = connection.getErrorStream();
                 if (nonNull(errorStream)) {
                     BufferedReader rdr = new BufferedReader(new InputStreamReader(errorStream));
-                    String error = rdr.lines().collect(Collectors.joining("\n"));
-                    String message = "Error while getting template " + entityName + " body: " + body + "\n\n";
+                    String error = rdr.lines().collect(Collectors.joining("<br>"));
+                    String message = "Error while getting template " + entityName + "<br>";
                     System.err.println(message);
-                    emailService.sendEmail(errorTime + "\n" + message + "\n" + error, "clearbox204@gmail.com");
-                    throw new AppException(errorTime + "\n" + message + "\n" + error);
+                    emailService.sendEmail(errorTime + "<br>" + message + "<br>" + error + "<br> body: " + body, "clearbox204@gmail.com");
+                    throw new AppException(errorTime + "<br>" + message + "<br>" + error + "<br> body: " + body);
 
                 } else {
-                    String error = "Unknown error while getting template " + entityName + " body: " + body;
-                    String message = errorTime + "\n" + error + "\n" + connection.getResponseMessage() + "\n" + connection.getResponseCode();
+                    String error = "Unknown error while getting template " + entityName + "<br>";
+                    String message = errorTime + "<br>" + error + "<br>" + connection.getResponseMessage() + "<br>" + connection.getResponseCode() + "<br> body: " + body;
                     System.err.println(message);
                     emailService.sendEmail(message, "clearbox204@gmail.com");
                     throw new AppException(message);
@@ -235,7 +233,7 @@ public class EntityClient {
         int counter = 0;
         List<Audit> entity = new ArrayList<>();
         while (true) {
-            HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "/"+entityId+"/audit?" + parameters + "limit=100&offset=" + offset, "GET", credentials.getAuthStr());
+            HttpURLConnection connection = Connector.getHttpURLConnection("/entity/" + entityName + "/" + entityId + "/audit?" + parameters + "limit=100&offset=" + offset, "GET", credentials.getAuthStr());
             try (InputStream in = connection.getInputStream(); JsonReader rdr = Json.createReader(in)) {
                 JsonArray rows = rdr.readObject().getJsonArray("rows");
                 if (isNull(rows)) {

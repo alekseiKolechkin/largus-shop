@@ -11,7 +11,8 @@ import java.io.PrintStream;
 public class InternalOrdersApplication {
 
 	public static void main(String[] args) throws FileNotFoundException {
-		System.setErr(new PrintStream(new File("log.txt")));
+//		System.setOut(new PrintStream(new File("log_out.txt")));
+//		System.setErr(new PrintStream(new File("log_err.txt")));
 		SpringApplication.run(InternalOrdersApplication.class, args);
 	}
 }

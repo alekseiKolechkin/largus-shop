@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
 
 @Service
 public class InternalOrderService {
@@ -222,14 +223,14 @@ public class InternalOrderService {
 
     private Organization getDestinationOrganization(List<Organization> organizations, Employee orderOwner) {
         return organizations.stream()
-                            .filter(organization -> organization.getOwner().getMeta().equals(orderOwner.getMeta()))
+                            .filter(organization -> nonNull(organization.getOwner()) && organization.getOwner().getMeta().equals(orderOwner.getMeta()))
                             .findFirst()
                             .orElseThrow(() -> new AppException("Destination organization not found for owner: " + orderOwner.getMeta().getHref()));
     }
 
     private Store getDestinationStore(List<Store> stores, Employee orderOwner) {
         return stores.stream()
-                     .filter(store -> store.getOwner().getMeta().equals(orderOwner.getMeta()))
+                     .filter(store -> nonNull(store.getOwner()) && store.getOwner().getMeta().equals(orderOwner.getMeta()))
                      .findFirst()
                      .orElseThrow(() -> new AppException("Destination store not found for owner:" + orderOwner.getMeta().getHref()));
     }

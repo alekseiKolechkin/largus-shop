@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import ru.largusshop.internal_orders.utils.exception.AppException;
 import ru.largusshop.internal_orders.utils.exception.ExceptionInfo;
 
+import java.util.Arrays;
+
 @Service
 public class ExceptionMapper {
 
@@ -31,7 +33,9 @@ public class ExceptionMapper {
 
     public ExceptionInfo mapThrowableOnEntity(Throwable throwable) {
         ExceptionInfo entity = new ExceptionInfo();
-        entity.setMessage(throwable.getMessage());
+//        entity.setMessage(throwable.getMessage());
+        entity.setMessage(throwable.toString());
+        entity.setDetailMessage(Arrays.toString(throwable.getStackTrace()));
         entity.setErrorNumber(HttpStatus.INTERNAL_SERVER_ERROR.value());
         entity.setResponseErrorCode(HttpStatus.INTERNAL_SERVER_ERROR);
         return entity;
